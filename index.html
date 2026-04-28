@@ -1,267 +1,401 @@
 <!DOCTYPE html>
+
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="RSS Reader"/>
+  <meta name="theme-color" content="#111111"/>
   <title>RSS Reader</title>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111'/><text y='.9em' font-size='75' x='10'>📡</text></svg>"/>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #141414; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+    :root {
+      --bg: #111111;
+      --bg2: #1a1a1a;
+      --bg3: #222222;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text2: #888;
+      --text3: #555;
+      --accent: #378ADD;
+      --danger: #e24b4a;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'SF Pro Text', sans-serif; overscroll-behavior: none; }
 
-    #topbar { background: #1c1c1c; border-bottom: 1px solid #2a2a2a; padding: 10px 20px; display: flex; align-items: center; gap: 12px; }
-    #topbar h1 { font-size: 16px; font-weight: 600; color: #f0f0f0; }
-    #topbar p { font-size: 12px; color: #555; }
-    #add-btn { margin-left: auto; padding: 6px 14px; background: #378ADD; color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
-    #add-btn:hover { background: #2a6db5; }
-    #app { display: flex; flex: 1; overflow: hidden; }
+```
+/* ── LAYOUT ── */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
-    #sidebar { width: 220px; min-width: 220px; background: #1a1a1a; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; overflow-y: auto; }
-    #sidebar-title { padding: 12px 16px; font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #2a2a2a; }
-    .feed-item { display: flex; align-items: center; gap: 8px; padding: 9px 16px; cursor: pointer; border-left: 3px solid transparent; }
-    .feed-item:hover { background: #222; }
-    .feed-item.active { background: #1e2a38; border-left-color: #378ADD; }
-    .feed-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .feed-name { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ccc; }
-    .feed-item.active .feed-name { color: #e8e8e8; }
-    .feed-del { font-size: 14px; color: #444; display: none; cursor: pointer; }
-    .feed-item:hover .feed-del { display: block; }
-    .feed-del:hover { color: #e24b4a; }
+/* ── TOPBAR ── */
+#topbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+#topbar h1 { font-size: 17px; font-weight: 700; flex: 1; letter-spacing: -0.3px; }
+#topbar-add {
+  width: 34px; height: 34px;
+  background: var(--accent); border: none; border-radius: 50%;
+  color: #fff; font-size: 20px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
 
-    #articles { width: 300px; min-width: 240px; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; background: #181818; }
-    #articles-header { padding: 12px 16px; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; gap: 8px; }
-    #articles-header h2 { font-size: 14px; font-weight: 600; flex: 1; color: #e0e0e0; }
-    #article-list { flex: 1; overflow-y: auto; }
-    .article-item { padding: 12px 16px; border-bottom: 1px solid #222; cursor: pointer; }
-    .article-item:hover { background: #202020; }
-    .article-item.active { background: #1e2a38; }
-    .art-title { font-size: 13px; line-height: 1.4; color: #999; margin-bottom: 4px; }
-    .article-item.unread .art-title { color: #e0e0e0; font-weight: 600; }
-    .art-date { font-size: 11px; color: #555; }
+/* ── VIEWS (feeds / articles / reader) ── */
+#view-feeds, #view-articles, #view-reader {
+  flex: 1; overflow: hidden; display: flex; flex-direction: column;
+}
+.hidden { display: none !important; }
 
-    #reader { flex: 1; overflow-y: auto; padding: 28px 32px; background: #161616; }
-    #reader-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #444; font-size: 14px; gap: 10px; }
-    .reader-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 20px; margin-bottom: 12px; }
-    .reader-title { font-size: 20px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; color: #f0f0f0; }
-    .reader-meta { font-size: 12px; color: #555; margin-bottom: 18px; }
-    .reader-body { font-size: 14px; color: #999; line-height: 1.8; }
-    .reader-link { display: inline-block; margin-top: 20px; font-size: 13px; color: #378ADD; text-decoration: none; padding: 8px 16px; border: 1px solid #2a4a6e; border-radius: 6px; }
-    .reader-link:hover { background: #1e2a38; }
+/* ── BACK BAR ── */
+.back-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg2); flex-shrink: 0;
+}
+.back-btn {
+  background: none; border: none; color: var(--accent);
+  font-size: 15px; cursor: pointer; padding: 4px 0; display: flex; align-items: center; gap: 4px;
+}
+.back-bar h2 { font-size: 15px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .spinner { width: 14px; height: 14px; border: 2px solid #2a2a2a; border-top-color: #378ADD; border-radius: 50%; animation: spin 0.6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+/* ── FEED LIST ── */
+#feed-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.feed-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  cursor: pointer; active: background var(--bg3);
+}
+.feed-row:active { background: var(--bg3); }
+.feed-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.feed-info { flex: 1; min-width: 0; }
+.feed-info-name { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feed-info-url { font-size: 12px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.feed-chevron { color: var(--text3); font-size: 18px; }
+.feed-del-btn {
+  background: none; border: none; color: var(--text3);
+  font-size: 18px; cursor: pointer; padding: 6px; flex-shrink: 0;
+}
+.feed-del-btn:active { color: var(--danger); }
 
-    #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
-    #modal-overlay.open { display: flex; }
-    #modal { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px; padding: 24px; width: 360px; }
-    #modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: #f0f0f0; }
-    #modal p { font-size: 13px; color: #666; margin-bottom: 16px; }
-    #url-input { width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #2a2a2a; border-radius: 6px; margin-bottom: 6px; background: #141414; color: #e0e0e0; outline: none; }
-    #url-input:focus { border-color: #378ADD; }
-    #err-msg { font-size: 12px; color: #e24b4a; display: none; margin-bottom: 8px; }
-    .modal-row { display: flex; gap: 8px; }
-    .modal-row button { flex: 1; padding: 8px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #2a2a2a; background: #222; color: #ccc; }
-    #confirm-btn { background: #378ADD; color: #fff; border-color: #378ADD; }
-    #confirm-btn:hover { background: #2a6db5; }
-    #confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* empty state */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 10px; color: var(--text3); font-size: 14px; padding: 40px;
+  text-align: center;
+}
+.empty-state span { font-size: 44px; }
 
-    #suggestions { margin-bottom: 14px; }
-    #suggestions p { font-size: 12px; color: #555; margin-bottom: 6px; }
-    .sug-btn { display: inline-block; margin: 2px; padding: 4px 10px; font-size: 12px; border: 1px solid #2a2a2a; border-radius: 20px; cursor: pointer; background: #222; color: #888; }
-    .sug-btn:hover { background: #1e2a38; border-color: #378ADD; color: #378ADD; }
+/* ── ARTICLE LIST ── */
+#article-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.article-row {
+  padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.article-row:active { background: var(--bg3); }
+.article-row.unread .art-title { font-weight: 600; color: var(--text); }
+.art-title { font-size: 14px; line-height: 1.45; color: var(--text2); margin-bottom: 5px; }
+.art-date { font-size: 12px; color: var(--text3); }
 
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+/* ── READER ── */
+#reader-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 18px calc(var(--safe-bottom) + 20px); }
+.reader-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 14px; letter-spacing: 0.03em; }
+.reader-title { font-size: 20px; font-weight: 700; line-height: 1.35; letter-spacing: -0.3px; margin-bottom: 8px; }
+.reader-meta { font-size: 12px; color: var(--text3); margin-bottom: 18px; }
+.reader-body { font-size: 15px; color: var(--text2); line-height: 1.8; }
+.reader-link {
+  display: block; margin-top: 24px; margin-bottom: 8px;
+  text-align: center; text-decoration: none;
+  background: var(--accent); color: #fff;
+  padding: 14px 20px; border-radius: 12px;
+  font-size: 15px; font-weight: 600;
+}
+.reader-link:active { opacity: 0.8; }
+
+/* ── MODAL ── */
+#modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6); z-index: 200;
+  align-items: flex-end; justify-content: center;
+}
+#modal-overlay.open { display: flex; }
+#modal {
+  background: var(--bg2); border-radius: 20px 20px 0 0;
+  width: 100%; padding: 20px 20px calc(var(--safe-bottom) + 20px);
+  border-top: 1px solid var(--border);
+  animation: slideup 0.25s ease;
+}
+@keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+#modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+#modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+#modal p { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+#url-input {
+  width: 100%; padding: 13px 14px; font-size: 15px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); outline: none;
+  margin-bottom: 8px; -webkit-appearance: none;
+}
+#url-input:focus { border-color: var(--accent); }
+#err-msg { font-size: 13px; color: var(--danger); display: none; margin-bottom: 10px; }
+#confirm-btn {
+  width: 100%; padding: 14px; background: var(--accent);
+  color: #fff; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 10px;
+}
+#confirm-btn:active { opacity: 0.8; }
+#confirm-btn:disabled { opacity: 0.5; }
+#cancel-btn {
+  width: 100%; padding: 14px; background: var(--bg3);
+  color: var(--text2); border: none; border-radius: 12px;
+  font-size: 16px; cursor: pointer;
+}
+#cancel-btn:active { opacity: 0.7; }
+
+/* suggestions */
+#suggestions { margin-bottom: 14px; }
+#suggestions p { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+.sug-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.sug-btn {
+  padding: 6px 12px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 20px;
+  background: var(--bg3); color: var(--text2); cursor: pointer;
+}
+.sug-btn:active { border-color: var(--accent); color: var(--accent); }
+
+/* spinner */
+.spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+::-webkit-scrollbar { display: none; }
+```
+
   </style>
 </head>
 <body>
-
-<div id="topbar">
-  <div>
-    <h1>📡 RSS Reader</h1>
-    <p>Flux informatique perso</p>
-  </div>
-  <button id="add-btn">+ Ajouter un flux</button>
-</div>
-
 <div id="app">
-  <div id="sidebar">
-    <div id="sidebar-title">Mes flux</div>
+  <div id="topbar">
+    <h1>📡 RSS Reader</h1>
+    <button id="topbar-add" aria-label="Ajouter un flux">+</button>
+  </div>
+
+  <!-- VUE 1 : liste des flux -->
+
+  <div id="view-feeds">
     <div id="feed-list"></div>
   </div>
-  <div id="articles">
-    <div id="articles-header">
-      <h2 id="feed-label">Choisir un flux</h2>
+
+  <!-- VUE 2 : liste des articles -->
+
+  <div id="view-articles" class="hidden">
+    <div class="back-bar">
+      <button class="back-btn" id="back-to-feeds">‹ Flux</button>
+      <h2 id="feed-label">—</h2>
       <div id="spinner" style="display:none" class="spinner"></div>
     </div>
     <div id="article-list"></div>
   </div>
-  <div id="reader">
-    <div id="reader-content">
-      <div id="reader-empty">
-        <span style="font-size:40px">📰</span>
-        Sélectionne un flux puis un article
-      </div>
+
+  <!-- VUE 3 : lecteur -->
+
+  <div id="view-reader" class="hidden">
+    <div class="back-bar">
+      <button class="back-btn" id="back-to-articles">‹ Articles</button>
+      <h2 id="reader-feed-label">—</h2>
+    </div>
+    <div id="reader-scroll">
+      <div id="reader-content"></div>
     </div>
   </div>
 </div>
 
+<!-- MODAL ajout flux -->
+
 <div id="modal-overlay">
   <div id="modal">
+    <div id="modal-handle"></div>
     <h3>Ajouter un flux RSS</h3>
-    <p>Colle l'URL d'un flux RSS ou d'un site</p>
+    <p>Colle l'URL d'un flux ou d'un site</p>
     <div id="suggestions">
-      <p>Suggestions :</p>
-      <span class="sug-btn" onclick="fillUrl('https://hnrss.org/frontpage')">Hacker News</span>
-      <span class="sug-btn" onclick="fillUrl('https://dev.to/feed')">Dev.to</span>
-      <span class="sug-btn" onclick="fillUrl('https://www.lemondeinformatique.fr/flux-rss/thematique/toutes-les-actualites/rss.xml')">Le Monde Info.</span>
-      <span class="sug-btn" onclick="fillUrl('https://feeds.arstechnica.com/arstechnica/index')">ArsTechnica</span>
-      <span class="sug-btn" onclick="fillUrl('https://css-tricks.com/feed/')">CSS-Tricks</span>
-      <span class="sug-btn" onclick="fillUrl('https://www.numerama.com/feed/')">Numerama</span>
+      <p>Suggestions rapides</p>
+      <div class="sug-pills">
+        <span class="sug-btn" onclick="fillUrl('https://hnrss.org/frontpage')">Hacker News</span>
+        <span class="sug-btn" onclick="fillUrl('https://dev.to/feed')">Dev.to</span>
+        <span class="sug-btn" onclick="fillUrl('https://korben.info/feed')">Korben</span>
+        <span class="sug-btn" onclick="fillUrl('https://next.ink/feed/')">Next.ink</span>
+        <span class="sug-btn" onclick="fillUrl('https://www.numerama.com/feed/')">Numerama</span>
+        <span class="sug-btn" onclick="fillUrl('https://www.clubic.com/feed/rss')">Clubic</span>
+        <span class="sug-btn" onclick="fillUrl('https://linuxfr.org/news.atom')">LinuxFr</span>
+        <span class="sug-btn" onclick="fillUrl('https://feeds.arstechnica.com/arstechnica/index')">ArsTechnica</span>
+      </div>
     </div>
-    <input id="url-input" type="text" placeholder="https://..." />
+    <input id="url-input" type="url" inputmode="url" placeholder="https://..." autocorrect="off" autocapitalize="none"/>
     <div id="err-msg">Impossible de charger ce flux. Vérifie l'URL.</div>
-    <div class="modal-row">
-      <button id="cancel-btn">Annuler</button>
-      <button id="confirm-btn">Ajouter</button>
-    </div>
+    <button id="confirm-btn">Ajouter</button>
+    <button id="cancel-btn">Annuler</button>
   </div>
 </div>
 
 <script>
 const PROXY = 'https://api.rss2json.com/v1/api.json?rss_url=';
-const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56','#993C1D'];
-const STORAGE_KEY = 'rss-reader-feeds';
+const COLORS = ['#378ADD','#1D9E75','#E24B4A','#BA7517','#7F77DD','#D4537E','#0F6E56','#E2841A'];
+const SK_FEEDS = 'rss-feeds-v2';
+const SK_READ  = 'rss-read-v2';
 
 const DEFAULT_FEEDS = [
-  { name: 'Hacker News', url: 'https://hnrss.org/frontpage', color: '#E24B4A' },
-  { name: 'The Verge Tech', url: 'https://www.theverge.com/rss/index.xml', color: '#378ADD' },
-  { name: 'Dev.to', url: 'https://dev.to/feed', color: '#1D9E75' },
-  { name: 'Le Monde Info.', url: 'https://www.lemondeinformatique.fr/flux-rss/thematique/toutes-les-actualites/rss.xml', color: '#7F77DD' },
+  { name: 'Hacker News',     url: 'https://hnrss.org/frontpage',          color: '#E24B4A' },
+  { name: 'Dev.to',          url: 'https://dev.to/feed',                  color: '#1D9E75' },
+  { name: 'Korben',          url: 'https://korben.info/feed',             color: '#378ADD' },
+  { name: 'Le Monde Info.',  url: 'https://www.lemondeinformatique.fr/flux-rss/thematique/toutes-les-actualites/rss.xml', color: '#7F77DD' },
 ];
 
 function loadFeeds() {
-  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : DEFAULT_FEEDS; }
-  catch(e) { return DEFAULT_FEEDS; }
+  try { const s = localStorage.getItem(SK_FEEDS); return s ? JSON.parse(s) : DEFAULT_FEEDS; } catch { return DEFAULT_FEEDS; }
 }
-function saveFeeds() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.feeds)); }
+function saveFeeds() { localStorage.setItem(SK_FEEDS, JSON.stringify(state.feeds)); }
+function loadRead()  { try { return new Set(JSON.parse(localStorage.getItem(SK_READ) || '[]')); } catch { return new Set(); } }
+function saveRead()  { localStorage.setItem(SK_READ, JSON.stringify([...state.read])); }
 
-let state = {
-  feeds: loadFeeds(),
-  articles: [],
-  selectedFeed: null,
-  selectedArticle: null,
-  read: new Set(JSON.parse(localStorage.getItem('rss-read') || '[]')),
-};
-function saveRead() { localStorage.setItem('rss-read', JSON.stringify([...state.read])); }
+const state = { feeds: loadFeeds(), articles: [], selectedFeed: null, selectedArticle: null, read: loadRead() };
 
-function renderSidebar() {
-  document.getElementById('feed-list').innerHTML = state.feeds.map((f, i) => `
-    <div class="feed-item ${state.selectedFeed === i ? 'active' : ''}" onclick="selectFeed(${i})">
+/* ── NAVIGATION ── */
+function showView(name) {
+  ['feeds','articles','reader'].forEach(v => document.getElementById('view-'+v).classList.toggle('hidden', v !== name));
+}
+
+/* ── FEED LIST ── */
+function renderFeeds() {
+  const el = document.getElementById('feed-list');
+  if (!state.feeds.length) {
+    el.innerHTML = '<div class="empty-state"><span>📡</span>Aucun flux. Appuie sur + pour en ajouter !</div>';
+    return;
+  }
+  el.innerHTML = state.feeds.map((f, i) => `
+    <div class="feed-row" onclick="openFeed(${i})">
       <div class="feed-dot" style="background:${f.color}"></div>
-      <span class="feed-name">${f.name}</span>
-      <span class="feed-del" onclick="deleteFeed(event,${i})">✕</span>
+      <div class="feed-info">
+        <div class="feed-info-name">${f.name}</div>
+      </div>
+      <span class="feed-chevron">›</span>
+      <button class="feed-del-btn" onclick="deleteFeed(event,${i})" aria-label="Supprimer">✕</button>
     </div>
   `).join('');
 }
 
-async function selectFeed(i) {
+async function openFeed(i) {
   state.selectedFeed = i;
   state.articles = [];
   state.selectedArticle = null;
-  renderSidebar(); renderArticles(); renderReader();
   document.getElementById('feed-label').textContent = state.feeds[i].name;
+  document.getElementById('reader-feed-label').textContent = state.feeds[i].name;
+  renderArticles();
+  showView('articles');
   document.getElementById('spinner').style.display = 'block';
   try {
     const r = await fetch(PROXY + encodeURIComponent(state.feeds[i].url));
     const d = await r.json();
     state.articles = (d.items || []).slice(0, 30).map(a => ({
-      title: a.title || 'Sans titre',
-      link: a.link,
-      date: a.pubDate ? new Date(a.pubDate).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'}) : '',
-      summary: (a.description || a.content || '').replace(/<[^>]+>/g,'').trim().slice(0,400),
-      feed: state.feeds[i].name,
-      color: state.feeds[i].color,
+      title:   a.title || 'Sans titre',
+      link:    a.link,
+      date:    a.pubDate ? new Date(a.pubDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'}) : '',
+      summary: (a.description || a.content || '').replace(/<[^>]+>/g,'').trim().slice(0, 500),
+      feed:    state.feeds[i].name,
+      color:   state.feeds[i].color,
     }));
   } catch(e) { state.articles = []; }
   document.getElementById('spinner').style.display = 'none';
   renderArticles();
 }
 
+/* ── ARTICLE LIST ── */
 function renderArticles() {
-  const list = document.getElementById('article-list');
+  const el = document.getElementById('article-list');
   if (!state.articles.length) {
-    list.innerHTML = state.selectedFeed !== null ? '<div style="padding:20px 16px;font-size:13px;color:#555">Aucun article chargé.</div>' : '';
+    el.innerHTML = state.selectedFeed !== null
+      ? '<div class="empty-state"><span>⏳</span>Chargement ou aucun article disponible.</div>'
+      : '';
     return;
   }
-  list.innerHTML = state.articles.map((a, i) => {
+  el.innerHTML = state.articles.map((a, i) => {
     const key = state.selectedFeed + '-' + i;
-    return `<div class="article-item ${state.selectedArticle===i?'active':''} ${state.read.has(key)?'':'unread'}" onclick="selectArticle(${i})">
+    return `<div class="article-row ${state.read.has(key)?'':'unread'}" onclick="openArticle(${i})">
       <div class="art-title">${a.title}</div>
       <div class="art-date">${a.date}</div>
     </div>`;
   }).join('');
 }
 
-function selectArticle(i) {
+function openArticle(i) {
   state.selectedArticle = i;
   const key = state.selectedFeed + '-' + i;
   state.read.add(key); saveRead();
-  renderArticles(); renderReader();
-}
-
-function renderReader() {
-  const c = document.getElementById('reader-content');
-  if (state.selectedArticle === null) {
-    c.innerHTML = '<div id="reader-empty"><span style="font-size:40px">📰</span>Sélectionne un flux puis un article</div>';
-    return;
-  }
-  const a = state.articles[state.selectedArticle];
-  c.innerHTML = `
+  const a = state.articles[i];
+  document.getElementById('reader-content').innerHTML = `
     <div class="reader-tag" style="background:${a.color}25;color:${a.color}">${a.feed}</div>
     <div class="reader-title">${a.title}</div>
     <div class="reader-meta">${a.date}</div>
-    <div class="reader-body">${a.summary}${a.summary.length>=399?'…':''}</div>
+    <div class="reader-body">${a.summary}${a.summary.length >= 499 ? '…' : ''}</div>
     <a class="reader-link" href="${a.link}" target="_blank">Lire l'article complet →</a>
   `;
+  document.getElementById('reader-scroll').scrollTop = 0;
+  renderArticles();
+  showView('reader');
 }
 
+/* ── DELETE ── */
 function deleteFeed(e, i) {
   e.stopPropagation();
-  if (!confirm('Supprimer ce flux ?')) return;
+  if (!confirm('Supprimer « ' + state.feeds[i].name + ' » ?')) return;
   state.feeds.splice(i, 1);
-  if (state.selectedFeed === i) { state.selectedFeed = null; state.articles = []; state.selectedArticle = null; }
+  if (state.selectedFeed === i) state.selectedFeed = null;
   else if (state.selectedFeed > i) state.selectedFeed--;
-  saveFeeds(); renderSidebar(); renderArticles(); renderReader();
+  saveFeeds(); renderFeeds();
 }
 
+/* ── MODAL ── */
 function fillUrl(url) { document.getElementById('url-input').value = url; }
+function openModal()  { document.getElementById('modal-overlay').classList.add('open'); }
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('err-msg').style.display = 'none';
+  document.getElementById('url-input').value = '';
+}
 
-document.getElementById('add-btn').onclick = () => document.getElementById('modal-overlay').classList.add('open');
-document.getElementById('cancel-btn').onclick = () => { document.getElementById('modal-overlay').classList.remove('open'); document.getElementById('err-msg').style.display='none'; };
+document.getElementById('topbar-add').onclick = openModal;
+document.getElementById('cancel-btn').onclick = closeModal;
+document.getElementById('modal-overlay').onclick = e => { if (e.target === document.getElementById('modal-overlay')) closeModal(); };
+
 document.getElementById('confirm-btn').onclick = async () => {
   const url = document.getElementById('url-input').value.trim();
   if (!url) return;
   const err = document.getElementById('err-msg');
-  err.style.display = 'none';
   const btn = document.getElementById('confirm-btn');
-  btn.disabled = true; btn.textContent = 'Chargement...';
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Chargement…';
   try {
     const r = await fetch(PROXY + encodeURIComponent(url));
     const d = await r.json();
     if (d.status !== 'ok') throw new Error();
     const name = d.feed?.title || new URL(url).hostname;
     state.feeds.push({ name, url, color: COLORS[state.feeds.length % COLORS.length] });
-    saveFeeds();
-    document.getElementById('url-input').value = '';
-    document.getElementById('modal-overlay').classList.remove('open');
-    renderSidebar();
-  } catch(e) { err.style.display = 'block'; }
+    saveFeeds(); closeModal(); renderFeeds();
+  } catch { err.style.display = 'block'; }
   btn.disabled = false; btn.textContent = 'Ajouter';
 };
 
-renderSidebar();
+/* ── NAVIGATION RETOUR ── */
+document.getElementById('back-to-feeds').onclick   = () => showView('feeds');
+document.getElementById('back-to-articles').onclick = () => showView('articles');
+
+/* ── INIT ── */
+renderFeeds();
+showView('feeds');
 </script>
+
 </body>
 </html>
